@@ -213,6 +213,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .qmonto:focus,.qcom:focus{border-color:var(--accent);outline:none}
 .qcats .chip{font-size:14px}
 .tag.a{background:var(--line);color:var(--fg)}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);margin:2px 2px -4px}
+.pseg{display:flex}.pseg button{flex:1}
+.para{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pp{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:10px 12px;min-height:50px;font-weight:600;color:var(--muted);text-align:left;font-size:15px}
+.pp b{margin-left:auto;font-weight:700;font-size:14px}
+.pp .ck{width:22px;height:22px;flex:none;border-radius:7px;border:1.5px solid var(--line);display:grid;place-items:center;font-size:13px;color:transparent}
+.pp.on{border-color:var(--accent);color:var(--fg);background:var(--accent-soft)}
+.pp.on .ck{background:var(--accent);border-color:var(--accent);color:#fff}
+.sheet .seg{display:flex;width:100%}.sheet .seg button{flex:1;padding:7px 4px;white-space:nowrap;font-size:14px}
 </style>
 </head>
 <body>
@@ -274,7 +283,7 @@ function resumen(k){
   for(const x of movsMes(k)){
     if(x.tipo==='gasto'){
       total+=x.monto; const ps=x.monto*x.parteS/100; parteS+=ps;
-      if(x.pago==='ambos'){ santi+=ps; meli+=x.monto-ps; }
+      if(x.pago==='ambos'){ santi+=x.monto/2; meli+=x.monto/2; b+=x.monto/2-ps; }
       else { if(x.pago==='santi') santi+=x.monto; else meli+=x.monto; b+= x.pago==='santi' ? x.monto-ps : -ps; }
     } else if(x.tipo==='saldo'&&x.estado!=='pend'){ b+= x.de==='meli' ? -x.monto : x.monto; }
   }
@@ -344,14 +353,22 @@ function mesCard(k){
   </div>`;
 }
 function diasMes(k){const [y,mm]=k.split('-').map(Number);const tot=new Date(y,mm,0).getDate();return k===HOY.slice(0,7)?+HOY.slice(8):tot}
+function paraBtns(s,m,ps,monto,act,ids){
+  return `<div class="para">${[['santi',s,monto*ps/100,ids[0]],['meli',m,monto*(100-ps)/100,ids[1]]].map(([p,on,v,id])=>`<button type="button" class="pp ${on?'on':''}" data-act="${act}" data-v="${p}" aria-pressed="${on}"><span class="ck">\u2713</span><span>${NOM[p]}</span><b class="num" id="${id}">${on?fmt(v):'\u2014'}</b></button>`).join('')}</div>`;
+}
+function qPS(){const p=S.qPara||{santi:true,meli:true};return p.santi&&p.meli?50:p.santi?100:p.meli?0:null}
 function quickCard(){
-  const p=S.qPago||S.yo;
+  const p=S.qPago||S.yo, ps=qPS();
   return `<div class="card quick">
-    <h3 style="margin:0">Anotar gasto compartido</h3>
-    <div class="chips"><button class="chip ${p==='santi'?'on':''}" data-act="qpago" data-v="santi">Pagó Santi</button><button class="chip ${p==='meli'?'on':''}" data-act="qpago" data-v="meli">Pagó Meli</button><button class="chip ${p==='ambos'?'on':''}" data-act="qpago" data-v="ambos">Pagamos los dos</button></div>
+    <h3 style="margin:0">Anotar gasto</h3>
     <form class="qf" id="qform">
       <input id="qm" class="qmonto num" inputmode="decimal" placeholder="$ Monto" autocomplete="off" enterkeyhint="done" aria-label="Monto" value="${esc(S.qM||'')}">
-      <div class="chips qcats" role="group" aria-label="Categoría">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
+      <div class="lbl">Pag\u00f3</div>
+      <div class="seg pseg">${['santi','meli','ambos'].map(v=>`<button type="button" class="${p===v?'on':''}" data-act="qpago" data-v="${v}">${NOM[v]}</button>`).join('')}</div>
+      <div class="lbl">\u00bfPara qui\u00e9n?</div>
+      ${paraBtns(ps!==null&&ps>0,ps!==null&&ps<100,ps,qMonto(),'qpara',['qpS','qpM'])}
+      <div class="lbl">Categor\u00eda</div>
+      <div class="chips qcats" role="group" aria-label="Categor\u00eda">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
       <input id="qc" class="qcom" placeholder="Comentario (opcional)" autocomplete="off" enterkeyhint="send" aria-label="Comentario" value="${esc(S.qC||'')}">
       <button class="btn" id="qsend">Guardar</button>
     </form>
@@ -383,7 +400,7 @@ function quienCard(k){
 function rowMov(x){
   if(x.tipo==='saldo') return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--accent-soft)">🤝</div><div class="txt"><div class="t1">Pago entre ustedes${x.estado==='pend'?' <span class="tag m">Sin confirmar</span>':''}</div><div class="t2">${NOM[x.de]} → ${NOM[otro(x.de)]} · ${fCorta(x.fecha)}</div></div><div class="amt num">${fmt(x.monto)}</div></div>`;
   const c=cat(x.cat);
-  return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--${c.c})">${c.e}</div><div class="txt"><div class="t1">${esc(x.det)}</div><div class="t2">${c.n}${x.parteS!==50?' · '+(x.parteS===100?'todo de Santi':x.parteS===0?'todo de Meli':'Santi '+x.parteS+'%'):''}</div></div><div style="text-align:right"><div class="amt num">${fmt(x.monto)}</div><span class="tag ${x.pago==='santi'?'s':x.pago==='ambos'?'a':'m'}">${NOM[x.pago]}</span></div></div>`;
+  return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--${c.c})">${c.e}</div><div class="txt"><div class="t1">${esc(x.det)}</div><div class="t2">${c.n}${x.parteS!==50?' · '+(x.parteS===100?'para Santi':x.parteS===0?'para Meli':'Santi '+x.parteS+'%'):''}</div></div><div style="text-align:right"><div class="amt num">${fmt(x.monto)}</div><span class="tag ${x.pago==='santi'?'s':x.pago==='ambos'?'a':'m'}">${NOM[x.pago]}</span></div></div>`;
 }
 function ultimosCard(k){
   const l=movsMes(k).slice(0,5);
@@ -469,13 +486,16 @@ function render(fromSnap){
 function qMonto(){const n=parseFloat(String(S.qM||'').replace(/[$\s]/g,'').replace(/\./g,'').replace(',','.'));return n>0?n:0}
 function bindQuick(){
   const m=$('#qm'); if(!m) return;
-  m.oninput=()=>{S.qM=m.value}; $('#qc').oninput=()=>{S.qC=$('#qc').value};
+  const upd=()=>{const ps=qPS(),mo=qMonto();if(ps===null)return;
+    if($('#qpS'))$('#qpS').textContent=ps>0?fmt(mo*ps/100):'\u2014'; if($('#qpM'))$('#qpM').textContent=ps<100?fmt(mo*(100-ps)/100):'\u2014'};
+  m.oninput=()=>{S.qM=m.value;upd()}; $('#qc').oninput=()=>{S.qC=$('#qc').value};
   $('#qform').onsubmit=e=>{e.preventDefault();
     const monto=qMonto(); if(!monto){toast('Falta el monto');m.focus();return}
-    if(!S.qCat){toast('Elegí una categoría');return}
+    const ps=qPS(); if(ps===null){toast('Eleg\u00ed para qui\u00e9n');return}
+    if(!S.qCat){toast('Eleg\u00ed una categor\u00eda');return}
     const c=cat(S.qCat), fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-01';
-    const x={id:'',tipo:'gasto',fecha,det:(S.qC||'').trim()||c.n,cat:S.qCat,monto,pago:S.qPago||S.yo,por:S.yo,parteS:50};
-    S.qM='';S.qC='';S.qCat=null; if(document.activeElement)document.activeElement.blur(); render();
+    const x={id:'',tipo:'gasto',fecha,det:(S.qC||'').trim()||c.n,cat:S.qCat,monto,pago:S.qPago||S.yo,por:S.yo,parteS:ps};
+    S.qM='';S.qC='';S.qCat=null;S.qPara=null; if(document.activeElement)document.activeElement.blur(); render();
     guardar(x).then(ok=>{if(ok)toast('Guardado')});};
 }
 
@@ -493,7 +513,7 @@ function renderSheet(){
     ${isS?`<div class="fld"><label for="eFecha">Fecha</label><input id="eFecha" type="date" value="${x.fecha}"></div></div>`:`</div>
     <div class="two"><div class="fld"><label for="eFecha">Fecha</label><input id="eFecha" type="date" value="${x.fecha}"></div>
     <div class="fld"><label>Pagó</label><div class="seg"><button type="button" class="${x.pago==='santi'?'on':''}" data-act="epago" data-v="santi">Santi</button><button type="button" class="${x.pago==='meli'?'on':''}" data-act="epago" data-v="meli">Meli</button><button type="button" class="${x.pago==='ambos'?'on':''}" data-act="epago" data-v="ambos">Los dos</button></div></div></div>
-    <div class="fld"><label>Cómo se divide</label><div class="chips">${[[50,'Mitad y mitad'],[100,'Todo de Santi'],[0,'Todo de Meli']].map(([v,n])=>`<button type="button" class="chip ${x.parteS===v?'on':''}" data-act="eparte" data-v="${v}">${n}</button>`).join('')}</div>
+    <div class="fld"><label>¿Para quién?</label>${paraBtns(x.parteS>0,x.parteS<100,x.parteS,x.monto||0,'epara',['epS','epM'])}
     <div class="two" style="margin-top:6px"><div class="fld"><label for="ePS">% Santi</label><input id="ePS" inputmode="numeric" value="${x.parteS}"></div><div class="fld"><label>% Meli</label><input value="${100-x.parteS}" disabled></div></div></div>`}
     <div class="sh-a">${x.id?(S.delConf?`<span class="conf">¿Borrar?<button type="button" class="btn danger sm" data-act="delOk">Borrar</button><button type="button" class="btn ghost sm" data-act="delNo">No</button></span>`:`<button type="button" class="btn ghost" data-act="del">Borrar</button>`):'<span></span>'}
     <span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-act="close">Cancelar</button><button class="btn">Guardar</button></span></div>
@@ -530,6 +550,8 @@ document.addEventListener('click',e=>{
     case 'qpago': S.qPago=v; render(); break;
     case 'borrarTodo': S.conf='borrarTodo'; render(); break;
     case 'borrarTodoOk': S.conf=null; borrarTodo(); break;
+    case 'qpara': {const q={...(S.qPara||{santi:true,meli:true})}; q[v]=!q[v]; S.qPara=q; render();} break;
+    case 'epara': {readSheet(); const s0=S.edit.parteS>0,m0=S.edit.parteS<100; const s1=v==='santi'?!s0:s0, m1=v==='meli'?!m0:m0; if(!s1&&!m1){toast('Tiene que ser para alguien');break} S.edit.parteS=s1&&m1?50:s1?100:0; renderSheet();} break;
     case 'qcat': S.qCat=S.qCat===v?null:v; render(); break;
     case 'saldo': S.conf='saldo'; render(); break;
     case 'saldoNo': S.conf=null; render(); break;
