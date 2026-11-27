@@ -207,6 +207,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 #modo:empty{display:none}
 .err{color:var(--neg);font-size:14px;min-height:18px;margin:0}
 @media (max-width:519px){.ctrl{display:none}.ctrl.on-phone{display:flex}}
+.qf{display:flex;flex-direction:column;gap:10px}
+.qmonto{border:1.5px solid var(--line);background:var(--bg);border-radius:14px;padding:10px 14px;min-height:52px;font-size:24px;font-weight:700}
+.qcom{border:1.5px solid var(--line);background:var(--bg);border-radius:14px;padding:10px 14px;min-height:46px}
+.qmonto:focus,.qcom:focus{border-color:var(--accent);outline:none}
+.qcats .chip{font-size:14px}
 </style>
 </head>
 <body>
@@ -343,8 +348,12 @@ function quickCard(){
   return `<div class="card quick">
     <h3 style="margin:0">Anotar gasto compartido</h3>
     <div class="chips"><button class="chip ${p==='santi'?'on':''}" data-act="qpago" data-v="santi">Pagó Santi</button><button class="chip ${p==='meli'?'on':''}" data-act="qpago" data-v="meli">Pagó Meli</button></div>
-    <form class="qrow" id="qform"><input id="q" placeholder="18000 super" autocomplete="off" enterkeyhint="send" aria-label="Gasto"><button class="send" id="qsend" disabled aria-label="Guardar">↑</button></form>
-    <div class="prev" id="qprev">&nbsp;</div>
+    <form class="qf" id="qform">
+      <input id="qm" class="qmonto num" inputmode="decimal" placeholder="$ Monto" autocomplete="off" enterkeyhint="done" aria-label="Monto" value="${esc(S.qM||'')}">
+      <div class="chips qcats" role="group" aria-label="Categoría">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
+      <input id="qc" class="qcom" placeholder="Comentario (opcional)" autocomplete="off" enterkeyhint="send" aria-label="Comentario" value="${esc(S.qC||'')}">
+      <button class="btn" id="qsend">Guardar</button>
+    </form>
   </div>`;
 }
 function donutCard(k){
@@ -425,7 +434,7 @@ function vCel(k){
 
 function mesesOpts(){const meses=[...new Set(S.movs.map(x=>x.fecha.slice(0,7)).concat(HOY.slice(0,7)))].sort().reverse();return meses.map(k=>`<option value="${k}" ${k===S.mes?'selected':''}>${mesNom(k).replace(/^./,c=>c.toUpperCase())}</option>`).join('')}
 function render(fromSnap){
-  const qv=$('#q')?$('#q').value:'', qf=document.activeElement&&document.activeElement.id==='q', pv=$('#pmonto')?$('#pmonto').value:null;
+  const af=document.activeElement&&document.activeElement.id, pv=$('#pmonto')?$('#pmonto').value:null;
   $('#modo').textContent={vivo:'Sos '+NOM[S.yo],cargando:'Cargando…',error:'Sin conexión',login:''}[MODO]||'';
   const fuera=MODO==='login'||MODO==='inicio';
   $('#salir').hidden=fuera;
@@ -441,7 +450,7 @@ function render(fromSnap){
   $('#main').innerHTML=S.vista==='compu'?vCompu(S.mes):vCel(S.mes);
   const sc2=document.querySelector('.scr'); if(sc2) sc2.scrollTop=top;
   bindQuick();
-  if(qv&&$('#q')){$('#q').value=qv;$('#q').dispatchEvent(new Event('input'))} if(qf&&$('#q'))$('#q').focus();
+  if((af==='qm'||af==='qc')&&$('#'+af)){const el=$('#'+af);el.focus();const n=el.value.length;try{el.setSelectionRange(n,n)}catch(e){}}
   if(pv!==null&&$('#pmonto'))$('#pmonto').value=pv;
   $('#pform')&&($('#pform').onsubmit=e=>{e.preventDefault();const mo=parseFloat(String($('#pmonto').value).replace(/\./g,'').replace(',','.'));if(!mo){toast('Falta el monto');return}
     const r=resumen(S.mes),de=r.b>0?'meli':'santi',fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-28',yoDebo=S.yo===de;
@@ -452,17 +461,17 @@ function render(fromSnap){
   $('#fPago')&&($('#fPago').onchange=e=>{S.fPago=e.target.value;render()});
   if(!fromSnap) renderSheet();
 }
+function qMonto(){const n=parseFloat(String(S.qM||'').replace(/[$\s]/g,'').replace(/\./g,'').replace(',','.'));return n>0?n:0}
 function bindQuick(){
-  const q=$('#q'); if(!q) return;
-  const upd=()=>{const r=parse(q.value);$('#qsend').disabled=!r;
-    if(!r){$('#qprev').innerHTML='&nbsp;';return}
-    const p=r.pago||S.qPago||S.yo,c=cat(r.cat);
-    $('#qprev').innerHTML=`<b class="num">${fmt(r.monto)}</b> · ${c.e} ${c.n} · pagó ${NOM[p]} · 50/50`;};
-  q.oninput=upd;
-  $('#qform').onsubmit=e=>{e.preventDefault();const r=parse(q.value);if(!r)return;
-    const fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-01';
-    q.value='';upd();
-    guardar({id:'',tipo:'gasto',fecha,det:r.det,cat:r.cat,monto:r.monto,pago:r.pago||S.qPago||S.yo,por:S.yo,parteS:50}).then(ok=>{if(ok)toast('Guardado')});};
+  const m=$('#qm'); if(!m) return;
+  m.oninput=()=>{S.qM=m.value}; $('#qc').oninput=()=>{S.qC=$('#qc').value};
+  $('#qform').onsubmit=e=>{e.preventDefault();
+    const monto=qMonto(); if(!monto){toast('Falta el monto');m.focus();return}
+    if(!S.qCat){toast('Elegí una categoría');return}
+    const c=cat(S.qCat), fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-01';
+    const x={id:'',tipo:'gasto',fecha,det:(S.qC||'').trim()||c.n,cat:S.qCat,monto,pago:S.qPago||S.yo,por:S.yo,parteS:50};
+    S.qM='';S.qC='';S.qCat=null; if(document.activeElement)document.activeElement.blur(); render();
+    guardar(x).then(ok=>{if(ok)toast('Guardado')});};
 }
 
 /* ---------- Hoja de edición ---------- */
@@ -473,7 +482,7 @@ function renderSheet(){
   L.innerHTML=`<div class="ov" data-act="close"><form class="sheet" id="sh">
     <h2>${x.id?(isS?'Pago entre ustedes':'Editar gasto'):'Nuevo gasto'}</h2>
     ${isS?`<div class="fld"><label>Quién le pasó plata a quién</label><div class="seg"><button type="button" class="${x.de==='meli'?'on':''}" data-act="sde" data-v="meli">Meli → Santi</button><button type="button" class="${x.de==='santi'?'on':''}" data-act="sde" data-v="santi">Santi → Meli</button></div></div>`:
-    `<div class="fld"><label for="eDet">Detalle</label><input id="eDet" value="${esc(x.det)}"></div>
+    `<div class="fld"><label for="eDet">Comentario</label><input id="eDet" value="${esc(x.det)}"></div>
     <div class="two"><div class="fld"><label for="eCat">Categoría</label><select id="eCat">${CATS.map(c=>`<option value="${c.id}" ${x.cat===c.id?'selected':''}>${c.e} ${c.n}</option>`).join('')}</select></div>`}
     ${isS?'<div class="two">':''}<div class="fld"><label for="eMonto">Monto</label><input id="eMonto" inputmode="decimal" value="${x.monto||''}"></div>
     ${isS?`<div class="fld"><label for="eFecha">Fecha</label><input id="eFecha" type="date" value="${x.fecha}"></div></div>`:`</div>
@@ -513,7 +522,8 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'vista': S.vista=v; try{localStorage.setItem('fp-vista',v)}catch(e){} render(); break;
     case 'yo': S.yo=v; S.qPago=null; S.conf=null; render(); toast('Ahora sos '+NOM[v]); break;
-    case 'qpago': S.qPago=v; {const val=$('#q').value; render(); $('#q').value=val; $('#q').dispatchEvent(new Event('input'));} break;
+    case 'qpago': S.qPago=v; render(); break;
+    case 'qcat': S.qCat=S.qCat===v?null:v; render(); break;
     case 'saldo': S.conf='saldo'; render(); break;
     case 'saldoNo': S.conf=null; render(); break;
     case 'pOk': {const x=S.movs.find(y=>String(y.id)===b.dataset.id);if(x)guardar({...x,estado:'ok'}).then(ok=>{if(ok)toast('Confirmado')});} break;
