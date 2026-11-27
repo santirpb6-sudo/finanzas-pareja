@@ -222,7 +222,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pp.on{border-color:var(--accent);color:var(--fg);background:var(--accent-soft)}
 .pp.on .ck{background:var(--accent);border-color:var(--accent);color:#fff}
 .sheet .seg{display:flex;width:100%}.sheet .seg button{flex:1;padding:7px 4px;white-space:nowrap;font-size:14px}
-.qtxt{min-height:52px;font-size:17px;border-color:var(--accent)}
+.qtop{display:grid;grid-template-columns:40% 1fr;gap:8px}
+.qtop .qmonto{min-width:0;font-size:22px}
+.qtxt{min-height:52px;font-size:16px;min-width:0}
+#qbody:empty{display:none}
 </style>
 </head>
 <body>
@@ -378,22 +381,26 @@ function paraBtns(s,m,ps,monto,act,ids){
   return `<div class="para">${[['santi',s,monto*ps/100,ids[0]],['meli',m,monto*(100-ps)/100,ids[1]]].map(([p,on,v,id])=>`<button type="button" class="pp ${on?'on':''}" data-act="${act}" data-v="${p}" aria-pressed="${on}"><span class="ck">\u2713</span><span>${NOM[p]}</span><b class="num" id="${id}">${on?fmt(v):'\u2014'}</b></button>`).join('')}</div>`;
 }
 function qPS(){const p=S.qPara||{santi:true,meli:true};return p.santi&&p.meli?50:p.santi?100:p.meli?0:null}
-function quickCard(){
+function qBody(){
+  if(!(S.qM||S.qT||S.qManual)) return '';
   const p=S.qPago||S.yo, ps=qPS();
+  return `<div class="lbl">Pagó</div>
+      <div class="seg pseg">${['santi','meli','ambos'].map(v=>`<button type="button" class="${p===v?'on':''}" data-act="qpago" data-v="${v}">${NOM[v]}</button>`).join('')}</div>
+      <div class="lbl">¿Para quién?</div>
+      ${paraBtns(ps!==null&&ps>0,ps!==null&&ps<100,ps,qMonto(),'qpara',['qpS','qpM'])}
+      <div class="lbl">Categoría</div>
+      <div class="chips qcats" role="group" aria-label="Categoría">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
+      <input id="qc" class="qcom" placeholder="Comentario (opcional)" autocomplete="off" enterkeyhint="done" aria-label="Comentario" value="${esc(S.qC||'')}">
+      <div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-act="qcancel">Cancelar</button><button class="btn" id="qsend" style="flex:1">Guardar</button></div>`;
+}
+function quickCard(){
   return `<div class="card quick">
     <h3 style="margin:0">Anotar gasto</h3>
-    <input id="qt" class="qcom qtxt" placeholder="Ej: 18000 s\u00faper pag\u00f3 Meli" autocomplete="off" enterkeyhint="done" aria-label="Escribir gasto" value="${esc(S.qT||'')}">
-    ${!(S.qT||S.qManual)?`<button type="button" class="link" data-act="qmanual" style="align-self:flex-start">o cargalo a mano</button>`:`<form class="qf" id="qform">`}${!(S.qT||S.qManual)?'':`
-      <input id="qm" class="qmonto num" inputmode="decimal" placeholder="$ Monto" autocomplete="off" enterkeyhint="done" aria-label="Monto" value="${esc(S.qM||'')}">
-      <div class="lbl">Pag\u00f3</div>
-      <div class="seg pseg">${['santi','meli','ambos'].map(v=>`<button type="button" class="${p===v?'on':''}" data-act="qpago" data-v="${v}">${NOM[v]}</button>`).join('')}</div>
-      <div class="lbl">\u00bfPara qui\u00e9n?</div>
-      ${paraBtns(ps!==null&&ps>0,ps!==null&&ps<100,ps,qMonto(),'qpara',['qpS','qpM'])}
-      <div class="lbl">Categor\u00eda</div>
-      <div class="chips qcats" role="group" aria-label="Categor\u00eda">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
-      <input id="qc" class="qcom" placeholder="Comentario (opcional)" autocomplete="off" enterkeyhint="send" aria-label="Comentario" value="${esc(S.qC||'')}">
-      <div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-act="qcancel">Cancelar</button><button class="btn" id="qsend" style="flex:1">Guardar</button></div>
-    </form>`}
+    <form class="qf" id="qform">
+      <div class="qtop"><input id="qm" class="qmonto num" type="text" inputmode="numeric" placeholder="$ Monto" autocomplete="off" enterkeyhint="next" aria-label="Monto" value="${esc(S.qM||'')}">
+      <input id="qt" class="qcom qtxt" placeholder="Ej: súper pagó Meli" autocomplete="off" enterkeyhint="done" aria-label="Qué fue" value="${esc(S.qT||'')}"></div>
+      <div id="qbody" class="qf">${qBody()}</div>
+    </form>
   </div>`;
 }
 function donutCard(k){
@@ -506,18 +513,21 @@ function render(fromSnap){
   if(!fromSnap) renderSheet();
 }
 function qMonto(){const n=parseFloat(String(S.qM||'').replace(/[$\s]/g,'').replace(/\./g,'').replace(',','.'));return n>0?n:0}
+function updQ(){const b=$('#qbody'); if(!b) return; b.innerHTML=qBody(); const c=$('#qc'); if(c) c.oninput=()=>{S.qC=c.value};}
+function fmtMil(v){const d=String(v).replace(/\D/g,'');return d?(+d).toLocaleString('es-AR'):''}
 function bindQuick(){
-  const t=$('#qt'); if(t){ t.oninput=()=>{S.qT=t.value; const r=parse2(t.value);
-    S.qM=r.monto?String(r.monto).replace('.',','):''; S.qCat=r.cat||null; S.qC=r.com; if(r.pago) S.qPago=r.pago; S.qPara=r.para||null; render();};
-    t.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();t.blur()}}; }
-  const m=$('#qm'); if(!m) return;
-  const upd=()=>{const ps=qPS(),mo=qMonto();if(ps===null)return;
-    if($('#qpS'))$('#qpS').textContent=ps>0?fmt(mo*ps/100):'\u2014'; if($('#qpM'))$('#qpM').textContent=ps<100?fmt(mo*(100-ps)/100):'\u2014'};
-  m.oninput=()=>{S.qM=m.value;upd()}; $('#qc').oninput=()=>{S.qC=$('#qc').value};
+  const m=$('#qm'), t=$('#qt'); if(!m) return;
+  m.oninput=()=>{m.value=fmtMil(m.value); S.qM=m.value; S.qMT=false; updQ()};
+  m.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();t.focus()}};
+  t.oninput=()=>{S.qT=t.value; const r=parse2(t.value);
+    if(r.monto&&(!m.value||S.qMT)){m.value=fmtMil(Math.round(r.monto)); S.qM=m.value; S.qMT=true}
+    S.qCat=r.cat||S.qCat; S.qC=r.com; if(r.pago) S.qPago=r.pago; if(r.para) S.qPara=r.para; updQ()};
+  t.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();t.blur()}};
+  updQ();
   $('#qform').onsubmit=e=>{e.preventDefault();
     const monto=qMonto(); if(!monto){toast('Falta el monto');m.focus();return}
-    const ps=qPS(); if(ps===null){toast('Eleg\u00ed para qui\u00e9n');return}
-    if(!S.qCat){toast('Eleg\u00ed una categor\u00eda');return}
+    const ps=qPS(); if(ps===null){toast('Elegí para quién');return}
+    if(!S.qCat){toast('Elegí una categoría');return}
     const c=cat(S.qCat), fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-01';
     const x={id:'',tipo:'gasto',fecha,det:(S.qC||'').trim()||c.n,cat:S.qCat,monto,pago:S.qPago||S.yo,por:S.yo,parteS:ps};
     S.qM='';S.qC='';S.qCat=null;S.qPara=null;S.qT='';S.qPago=null;S.qManual=false; if(document.activeElement)document.activeElement.blur(); render();
