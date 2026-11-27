@@ -410,11 +410,15 @@ function catBarsCard(k){
 }
 
 /* ---------- Vistas ---------- */
+function borrarCard(){
+  const n=S.movs.length; if(!n) return '';
+  return `<div class="card borrar" style="grid-column:1/-1;display:flex;flex-direction:column;gap:10px;align-items:flex-start">${S.conf==='borrarTodo'?`<p style="margin:0"><b>¿Borrar los ${n} movimientos de todos los meses?</b><br><span class="t2">Se borran para los dos y no se puede deshacer.</span></p><div class="chips"><button class="btn danger sm" data-act="borrarTodoOk">Sí, borrar todo</button><button class="btn ghost sm" data-act="saldoNo">No</button></div>`:`<button class="btn ghost" data-act="borrarTodo">Borrar todos los datos</button>`}</div>`;
+}
 function vCompu(k){
   return `<div class="grid">
     ${balanceCard(k)}${mesCard(k)}
     ${donutCard(k)}${quienCard(k)}${quickCard()}
-    ${tablaCard(k)}
+    ${tablaCard(k)}${borrarCard()}
   </div>`;
 }
 function vCel(k){
@@ -425,7 +429,7 @@ function vCel(k){
   const hd=t=>`<div class="ph-h"><h1>${t}</h1><span class="avs">${av('santi')}${av('meli')}</span></div>`+(framed?'':`<div class="chips" style="align-items:center"><select class="chip" id="selMes2" aria-label="Mes">${mesesOpts()}</select><span class="t2" style="flex:1">Sos ${NOM[S.yo]}</span><button class="chip" data-act="vista" data-v="compu">💻</button><button class="chip" data-act="salir">Salir</button></div>`);
   let body;
   if(S.tab==='inicio') body=hd('Inicio')+quickCard()+balanceCard(k,true)+ultimosCard(k);
-  else if(S.tab==='movs') body=hd('Movimientos')+(list||'<p class="t2">Sin movimientos</p>');
+  else if(S.tab==='movs') body=hd('Movimientos')+(list?'<p class="t2" style="margin:0 4px">Tocá un movimiento para editarlo o borrarlo.</p>'+list:'<p class="t2">Sin movimientos</p>')+borrarCard();
   else body=hd('Resumen')+mesCard(k)+catBarsCard(k)+quienCard(k);
   return `<div class="phone-w"><div class="phone ${framed?'framed':''}"><div class="scr">${body}</div>
     <nav class="tabs">${[['inicio','🏠','Inicio'],['movs','📋','Movimientos'],['resumen','📊','Resumen']].map(([id,e,n])=>`<button class="${S.tab===id?'on':''}" data-act="tab" data-v="${id}"><span>${e}</span>${n}</button>`).join('')}</nav>
@@ -523,6 +527,8 @@ document.addEventListener('click',e=>{
     case 'vista': S.vista=v; try{localStorage.setItem('fp-vista',v)}catch(e){} render(); break;
     case 'yo': S.yo=v; S.qPago=null; S.conf=null; render(); toast('Ahora sos '+NOM[v]); break;
     case 'qpago': S.qPago=v; render(); break;
+    case 'borrarTodo': S.conf='borrarTodo'; render(); break;
+    case 'borrarTodoOk': S.conf=null; borrarTodo(); break;
     case 'qcat': S.qCat=S.qCat===v?null:v; render(); break;
     case 'saldo': S.conf='saldo'; render(); break;
     case 'saldoNo': S.conf=null; render(); break;
@@ -583,6 +589,12 @@ function bindLogin(){
     catch(err){ const c=err&&err.code||''; $('#lerr').textContent=/invalid|wrong|not-found|credential/.test(c)?'Mail o contraseña incorrectos.':c.includes('too-many')?'Demasiados intentos. Esperá un rato.':'No se pudo entrar. Revisá la conexión.' } };
   $('#olvide').onclick=async()=>{const m=$('#lmail').value.trim(); if(!m){$('#lerr').textContent='Escribí tu mail arriba y tocá de nuevo.';return}
     try{ await firebase.auth().sendPasswordResetEmail(m); $('#lerr').textContent='Te mandamos un mail para cambiar la contraseña.' }catch(err){ $('#lerr').textContent='No se pudo mandar el mail.' } };
+}
+async function borrarTodo(){
+  if(MODO!=='vivo'){ toast('Todavía no hay conexión con los datos'); render(); return }
+  const ids=S.movs.map(x=>x.id); render();
+  try{ for(let i=0;i<ids.length;i+=400){ const b=COL.firestore.batch(); ids.slice(i,i+400).forEach(id=>b.delete(COL.doc(id))); await b.commit() } toast('Datos borrados') }
+  catch(e){ toast('No se pudo borrar todo') }
 }
 function salir(){ if(unsub){unsub();unsub=null} firebase.auth().signOut() }
 function boot(){
