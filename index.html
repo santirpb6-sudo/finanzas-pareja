@@ -427,8 +427,10 @@ function mesesOpts(){const meses=[...new Set(S.movs.map(x=>x.fecha.slice(0,7)).c
 function render(fromSnap){
   const qv=$('#q')?$('#q').value:'', qf=document.activeElement&&document.activeElement.id==='q', pv=$('#pmonto')?$('#pmonto').value:null;
   $('#modo').textContent={vivo:'Sos '+NOM[S.yo],cargando:'Cargando…',error:'Sin conexión',login:''}[MODO]||'';
-  $('#salir').hidden=MODO==='login';
-  document.querySelector('.ctrl-r').style.visibility=MODO==='login'?'hidden':'';
+  const fuera=MODO==='login'||MODO==='inicio';
+  $('#salir').hidden=fuera;
+  document.querySelector('.ctrl-r').style.visibility=fuera?'hidden':'';
+  if(MODO==='inicio'){ $('#main').innerHTML='<div class="login"><div class="logo">$</div><p class="t2">Abriendo\u2026</p></div>'; return }
   if(MODO==='login'){ $('#main').innerHTML=vLogin(); bindLogin(); return }
   $('#segYo').hidden=$('#lblYo').hidden=MODO!=='demo';
   const sc=document.querySelector('.scr'), top=sc?sc.scrollTop:0;
@@ -534,7 +536,7 @@ $('#selMes').onchange=e=>{S.mes=e.target.value;S.conf=null;render()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.edit){S.edit=null;renderSheet()}});
 let lw=innerWidth;addEventListener('resize',()=>{if((lw>=520)!==(innerWidth>=520)&&S.vista==='cel')render();lw=innerWidth});
 /* ---------- Datos compartidos ---------- */
-let MODO='login', COL=null;
+let MODO='inicio', COL=null;
 async function guardar(x){
   const {id,...body}=x; if(!body.creado) body.creado=Date.now();
   if(MODO!=='vivo'){ toast('Todavía no hay conexión con los datos'); return false }
@@ -556,9 +558,10 @@ const firebaseConfig={
   appId:"1:579145359812:web:74b49ac1d28ffd0f320491"
 };
 let unsub=null, lerr='';
+function mailGuardado(){try{return localStorage.getItem('fp-mail')||''}catch(e){return ''}}
 function vLogin(){
   return `<div class="login card"><div class="logo">$</div><h2>Finanzas en pareja</h2>
-    <form id="lform"><div class="fld"><label for="lmail">Mail</label><input id="lmail" type="email" autocomplete="username" inputmode="email" required></div>
+    <form id="lform"><div class="fld"><label for="lmail">Mail</label><input id="lmail" type="email" autocomplete="username" inputmode="email" value="${esc(mailGuardado())}" required></div>
     <div class="fld"><label for="lpass">Contraseña</label><input id="lpass" type="password" autocomplete="current-password" required></div>
     <button class="btn">Entrar</button></form>
     <p class="err" id="lerr">${esc(lerr)}</p>
@@ -574,6 +577,7 @@ function bindLogin(){
 function salir(){ if(unsub){unsub();unsub=null} firebase.auth().signOut() }
 function boot(){
   firebase.initializeApp(firebaseConfig);
+  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
   const fs=firebase.firestore();
   fs.enablePersistence({synchronizeTabs:true}).catch(()=>{});
   COL=fs.collection('movs');
@@ -585,6 +589,7 @@ function boot(){
     const mail=(u.email||'').toLowerCase();
     const who=Object.keys(MAILS).find(k=>MAILS[k].toLowerCase()===mail);
     if(!who){ lerr='Este mail no tiene acceso a la app.'; firebase.auth().signOut(); return }
+    try{localStorage.setItem('fp-mail',u.email)}catch(e){}
     S.yo=who; MODO='cargando'; render();
     const t=setTimeout(()=>{if(MODO==='cargando'){MODO='error';render()}},10000);
     unsub=COL.onSnapshot(snap=>{clearTimeout(t);MODO='vivo';S.movs=snap.docs.map(d=>({...d.data(),id:d.id}));render(true)},
