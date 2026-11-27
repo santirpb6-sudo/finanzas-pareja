@@ -212,6 +212,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .qcom{border:1.5px solid var(--line);background:var(--bg);border-radius:14px;padding:10px 14px;min-height:46px}
 .qmonto:focus,.qcom:focus{border-color:var(--accent);outline:none}
 .qcats .chip{font-size:14px}
+.tag.a{background:var(--line);color:var(--fg)}
 </style>
 </head>
 <body>
@@ -245,7 +246,7 @@ const CATS=[
  {id:'viajes',n:'Viajes',e:'\u2708\ufe0f',c:'c7',k:['viaje','hotel','micro','pasajes','airbnb','cabaña']},
  {id:'otros',n:'Otros',e:'📦',c:'c6',k:[]}
 ];
-const NOM={santi:'Santi',meli:'Meli'}, INI={santi:'S',meli:'M'};
+const NOM={santi:'Santi',meli:'Meli',ambos:'Los dos'}, INI={santi:'S',meli:'M'};
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const _d=new Date(),HOY=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
 let nid=100;
@@ -272,9 +273,9 @@ function resumen(k){
   let santi=0,meli=0,total=0,b=0,parteS=0;
   for(const x of movsMes(k)){
     if(x.tipo==='gasto'){
-      total+=x.monto; if(x.pago==='santi') santi+=x.monto; else meli+=x.monto;
-      const ps=x.monto*x.parteS/100; parteS+=ps;
-      b+= x.pago==='santi' ? x.monto-ps : -ps;
+      total+=x.monto; const ps=x.monto*x.parteS/100; parteS+=ps;
+      if(x.pago==='ambos'){ santi+=ps; meli+=x.monto-ps; }
+      else { if(x.pago==='santi') santi+=x.monto; else meli+=x.monto; b+= x.pago==='santi' ? x.monto-ps : -ps; }
     } else if(x.tipo==='saldo'&&x.estado!=='pend'){ b+= x.de==='meli' ? -x.monto : x.monto; }
   }
   return {santi,meli,total,b,parteS,parteM:total-parteS,n:gastosMes(k).length};
@@ -347,7 +348,7 @@ function quickCard(){
   const p=S.qPago||S.yo;
   return `<div class="card quick">
     <h3 style="margin:0">Anotar gasto compartido</h3>
-    <div class="chips"><button class="chip ${p==='santi'?'on':''}" data-act="qpago" data-v="santi">Pagó Santi</button><button class="chip ${p==='meli'?'on':''}" data-act="qpago" data-v="meli">Pagó Meli</button></div>
+    <div class="chips"><button class="chip ${p==='santi'?'on':''}" data-act="qpago" data-v="santi">Pagó Santi</button><button class="chip ${p==='meli'?'on':''}" data-act="qpago" data-v="meli">Pagó Meli</button><button class="chip ${p==='ambos'?'on':''}" data-act="qpago" data-v="ambos">Pagamos los dos</button></div>
     <form class="qf" id="qform">
       <input id="qm" class="qmonto num" inputmode="decimal" placeholder="$ Monto" autocomplete="off" enterkeyhint="done" aria-label="Monto" value="${esc(S.qM||'')}">
       <div class="chips qcats" role="group" aria-label="Categoría">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
@@ -382,7 +383,7 @@ function quienCard(k){
 function rowMov(x){
   if(x.tipo==='saldo') return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--accent-soft)">🤝</div><div class="txt"><div class="t1">Pago entre ustedes${x.estado==='pend'?' <span class="tag m">Sin confirmar</span>':''}</div><div class="t2">${NOM[x.de]} → ${NOM[otro(x.de)]} · ${fCorta(x.fecha)}</div></div><div class="amt num">${fmt(x.monto)}</div></div>`;
   const c=cat(x.cat);
-  return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--${c.c})">${c.e}</div><div class="txt"><div class="t1">${esc(x.det)}</div><div class="t2">${c.n}${x.parteS!==50?' · '+(x.parteS===100?'todo de Santi':x.parteS===0?'todo de Meli':'Santi '+x.parteS+'%'):''}</div></div><div style="text-align:right"><div class="amt num">${fmt(x.monto)}</div><span class="tag ${x.pago==='santi'?'s':'m'}">${NOM[x.pago]}</span></div></div>`;
+  return `<div class="row tap" data-act="edit" data-id="${x.id}"><div class="ico" style="--c:var(--${c.c})">${c.e}</div><div class="txt"><div class="t1">${esc(x.det)}</div><div class="t2">${c.n}${x.parteS!==50?' · '+(x.parteS===100?'todo de Santi':x.parteS===0?'todo de Meli':'Santi '+x.parteS+'%'):''}</div></div><div style="text-align:right"><div class="amt num">${fmt(x.monto)}</div><span class="tag ${x.pago==='santi'?'s':x.pago==='ambos'?'a':'m'}">${NOM[x.pago]}</span></div></div>`;
 }
 function ultimosCard(k){
   const l=movsMes(k).slice(0,5);
@@ -395,10 +396,10 @@ function tablaCard(k){
   const tot=l.filter(x=>x.tipo==='gasto').reduce((a,x)=>a+x.monto,0);
   return `<div class="card span3"><h3><span>Movimientos de ${mesNom(k)}</span>
     <span class="tfil"><select class="pill" id="fCat" aria-label="Categoría"><option value="">Todas las categorías</option>${CATS.map(c=>`<option value="${c.id}" ${S.fCat===c.id?'selected':''}>${c.e} ${c.n}</option>`).join('')}</select>
-    <select class="pill" id="fPago" aria-label="Quién pagó"><option value="">Pagó cualquiera</option><option value="santi" ${S.fPago==='santi'?'selected':''}>Pagó Santi</option><option value="meli" ${S.fPago==='meli'?'selected':''}>Pagó Meli</option></select></span></h3>
+    <select class="pill" id="fPago" aria-label="Quién pagó"><option value="">Pagó cualquiera</option><option value="santi" ${S.fPago==='santi'?'selected':''}>Pagó Santi</option><option value="meli" ${S.fPago==='meli'?'selected':''}>Pagó Meli</option><option value="ambos" ${S.fPago==='ambos'?'selected':''}>Pagaron los dos</option></select></span></h3>
     <div class="tw"><table class="num"><thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Pagó</th><th>División</th><th>Cargó</th><th class="r">Monto</th><th></th></tr></thead><tbody>
     ${l.map(x=>x.tipo==='saldo'?`<tr data-act="edit" data-id="${x.id}"><td>${fCorta(x.fecha)}</td><td>Pago entre ustedes${x.estado==='pend'?' <span class="tag m">Sin confirmar</span>':''}</td><td><div class="cat"><span class="ico sm" style="--c:var(--accent-soft)">🤝</span>Ajuste</div></td><td><span class="tag ${x.de==='santi'?'s':'m'}">${NOM[x.de]}</span></td><td class="t2">a ${NOM[otro(x.de)]}</td><td class="t2">${NOM[x.por]}</td><td class="r">${fmt(x.monto)}</td><td class="r"><button class="ibtn" data-act="edit" data-id="${x.id}" aria-label="Editar">✎</button></td></tr>`:
-      `<tr data-act="edit" data-id="${x.id}"><td>${fCorta(x.fecha)}</td><td>${esc(x.det)}</td><td><div class="cat"><span class="ico sm" style="--c:var(--${cat(x.cat).c})">${cat(x.cat).e}</span>${cat(x.cat).n}</div></td><td><span class="tag ${x.pago==='santi'?'s':'m'}">${NOM[x.pago]}</span></td><td class="t2">${x.parteS===50?'50 / 50':x.parteS+' / '+(100-x.parteS)}</td><td class="t2">${NOM[x.por]}</td><td class="r"><b>${fmt(x.monto)}</b></td><td class="r"><button class="ibtn" data-act="edit" data-id="${x.id}" aria-label="Editar">✎</button></td></tr>`).join('')||`<tr><td colspan="8" class="t2">Sin movimientos con este filtro</td></tr>`}
+      `<tr data-act="edit" data-id="${x.id}"><td>${fCorta(x.fecha)}</td><td>${esc(x.det)}</td><td><div class="cat"><span class="ico sm" style="--c:var(--${cat(x.cat).c})">${cat(x.cat).e}</span>${cat(x.cat).n}</div></td><td><span class="tag ${x.pago==='santi'?'s':x.pago==='ambos'?'a':'m'}">${NOM[x.pago]}</span></td><td class="t2">${x.parteS===50?'50 / 50':x.parteS+' / '+(100-x.parteS)}</td><td class="t2">${NOM[x.por]}</td><td class="r"><b>${fmt(x.monto)}</b></td><td class="r"><button class="ibtn" data-act="edit" data-id="${x.id}" aria-label="Editar">✎</button></td></tr>`).join('')||`<tr><td colspan="8" class="t2">Sin movimientos con este filtro</td></tr>`}
     </tbody></table></div>
     <div class="foot num"><span>${l.filter(x=>x.tipo==='gasto').length} gastos</span><span>${fmt(tot)}</span></div>
   </div>`;
@@ -491,7 +492,7 @@ function renderSheet(){
     ${isS?'<div class="two">':''}<div class="fld"><label for="eMonto">Monto</label><input id="eMonto" inputmode="decimal" value="${x.monto||''}"></div>
     ${isS?`<div class="fld"><label for="eFecha">Fecha</label><input id="eFecha" type="date" value="${x.fecha}"></div></div>`:`</div>
     <div class="two"><div class="fld"><label for="eFecha">Fecha</label><input id="eFecha" type="date" value="${x.fecha}"></div>
-    <div class="fld"><label>Pagó</label><div class="seg"><button type="button" class="${x.pago==='santi'?'on':''}" data-act="epago" data-v="santi">Santi</button><button type="button" class="${x.pago==='meli'?'on':''}" data-act="epago" data-v="meli">Meli</button></div></div></div>
+    <div class="fld"><label>Pagó</label><div class="seg"><button type="button" class="${x.pago==='santi'?'on':''}" data-act="epago" data-v="santi">Santi</button><button type="button" class="${x.pago==='meli'?'on':''}" data-act="epago" data-v="meli">Meli</button><button type="button" class="${x.pago==='ambos'?'on':''}" data-act="epago" data-v="ambos">Los dos</button></div></div></div>
     <div class="fld"><label>Cómo se divide</label><div class="chips">${[[50,'Mitad y mitad'],[100,'Todo de Santi'],[0,'Todo de Meli']].map(([v,n])=>`<button type="button" class="chip ${x.parteS===v?'on':''}" data-act="eparte" data-v="${v}">${n}</button>`).join('')}</div>
     <div class="two" style="margin-top:6px"><div class="fld"><label for="ePS">% Santi</label><input id="ePS" inputmode="numeric" value="${x.parteS}"></div><div class="fld"><label>% Meli</label><input value="${100-x.parteS}" disabled></div></div></div>`}
     <div class="sh-a">${x.id?(S.delConf?`<span class="conf">¿Borrar?<button type="button" class="btn danger sm" data-act="delOk">Borrar</button><button type="button" class="btn ghost sm" data-act="delNo">No</button></span>`:`<button type="button" class="btn ghost" data-act="del">Borrar</button>`):'<span></span>'}
