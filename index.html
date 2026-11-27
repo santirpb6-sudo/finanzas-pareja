@@ -222,6 +222,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pp.on{border-color:var(--accent);color:var(--fg);background:var(--accent-soft)}
 .pp.on .ck{background:var(--accent);border-color:var(--accent);color:#fff}
 .sheet .seg{display:flex;width:100%}.sheet .seg button{flex:1;padding:7px 4px;white-space:nowrap;font-size:14px}
+.qtxt{min-height:52px;font-size:17px;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -296,6 +297,26 @@ function balTxt(b){
   return {t:NOM[deudor]+' te debe',deudor};
 }
 
+function parse2(q){
+  const n=t=>t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  let s=' '+n(q)+' ', r={};
+  const quien=w=>w==='mi'||w==='yo'||w==='me'?S.yo:(w==='meli'||w==='melani'||w==='ella')?'meli':(w==='santi'||w==='santiago'||w==='el')?'santi':null;
+  const quita=re=>{s=s.replace(re,' ')};
+  const mm=s.match(/(\d[\d.]*)(,\d+)?\s*(k\b|mil\b)?/);
+  if(mm){let v=parseFloat(mm[1].replace(/\./g,'')+(mm[2]?'.'+mm[2].slice(1):''));if(mm[3])v*=1000;if(v>0)r.monto=v;s=s.replace(mm[0],' ')}
+  let m;
+  if(m=s.match(/\b(?:para|solo|de)\s+(?:los\s+dos|ambos|nosotros)\b/)){r.para={santi:true,meli:true};quita(m[0])}
+  else if(m=s.match(/\b(?:para|solo\s+(?:para\s+)?|solo\s+de)\s*(mi|meli|melani|ella|santi|santiago|el)\b/)){const p=quien(m[1]);if(p){r.para={santi:p==='santi',meli:p==='meli'};quita(m[0])}}
+  if(m=s.match(/\b(?:pagamos(?:\s+(?:los\s+dos|a\s+medias|mitad\s+y\s+mitad))?|pagaron\s+los\s+dos|a\s+medias)\b/)){r.pago='ambos';quita(m[0])}
+  else if(m=s.match(/\bpague\b|\blo\s+pague\b/)){r.pago=S.yo;quita(m[0])}
+  else if(m=s.match(/\bpago\s+(yo|meli|melani|ella|santi|santiago|el)\b|\b(yo|meli|melani|santi|santiago)\s+pago\b/)){r.pago=quien(m[1]||m[2]);quita(m[0])}
+  else if(m=s.match(/\b(meli|melani|santi|santiago)\b/)){r.pago=quien(m[1]);quita(m[0])}
+  const ws=s.split(/\s+/).filter(Boolean);
+  for(const w of ws){const c=CATS.find(x=>n(x.n).split(' ')[0]===w||x.id===w||x.k.includes(w)); if(c){r.cat=c.id;break}}
+  let com=ws.filter(w=>!(r.cat&&(n(cat(r.cat).n).split(' ')[0]===w||w===r.cat))).join(' ').replace(/^(en|de|del|la|el|por|y)\s+/,'').trim();
+  r.com=com?com.charAt(0).toUpperCase()+com.slice(1):'';
+  return r;
+}
 function parse(q){
   const s=q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const mm=s.match(/(\d[\d.]*)(,\d+)?\s*(k|mil)?/); if(!mm) return null;
@@ -361,7 +382,8 @@ function quickCard(){
   const p=S.qPago||S.yo, ps=qPS();
   return `<div class="card quick">
     <h3 style="margin:0">Anotar gasto</h3>
-    <form class="qf" id="qform">
+    <input id="qt" class="qcom qtxt" placeholder="Ej: 18000 s\u00faper pag\u00f3 Meli" autocomplete="off" enterkeyhint="done" aria-label="Escribir gasto" value="${esc(S.qT||'')}">
+    ${!(S.qT||S.qManual)?`<button type="button" class="link" data-act="qmanual" style="align-self:flex-start">o cargalo a mano</button>`:`<form class="qf" id="qform">`}${!(S.qT||S.qManual)?'':`
       <input id="qm" class="qmonto num" inputmode="decimal" placeholder="$ Monto" autocomplete="off" enterkeyhint="done" aria-label="Monto" value="${esc(S.qM||'')}">
       <div class="lbl">Pag\u00f3</div>
       <div class="seg pseg">${['santi','meli','ambos'].map(v=>`<button type="button" class="${p===v?'on':''}" data-act="qpago" data-v="${v}">${NOM[v]}</button>`).join('')}</div>
@@ -370,8 +392,8 @@ function quickCard(){
       <div class="lbl">Categor\u00eda</div>
       <div class="chips qcats" role="group" aria-label="Categor\u00eda">${CATS.map(c=>`<button type="button" class="chip ${S.qCat===c.id?'on':''}" data-act="qcat" data-v="${c.id}">${c.e} ${c.n}</button>`).join('')}</div>
       <input id="qc" class="qcom" placeholder="Comentario (opcional)" autocomplete="off" enterkeyhint="send" aria-label="Comentario" value="${esc(S.qC||'')}">
-      <button class="btn" id="qsend">Guardar</button>
-    </form>
+      <div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-act="qcancel">Cancelar</button><button class="btn" id="qsend" style="flex:1">Guardar</button></div>
+    </form>`}
   </div>`;
 }
 function donutCard(k){
@@ -472,7 +494,7 @@ function render(fromSnap){
   $('#main').innerHTML=S.vista==='compu'?vCompu(S.mes):vCel(S.mes);
   const sc2=document.querySelector('.scr'); if(sc2) sc2.scrollTop=top;
   bindQuick();
-  if((af==='qm'||af==='qc')&&$('#'+af)){const el=$('#'+af);el.focus();const n=el.value.length;try{el.setSelectionRange(n,n)}catch(e){}}
+  if((af==='qm'||af==='qc'||af==='qt')&&$('#'+af)){const el=$('#'+af);el.focus();const n=el.value.length;try{el.setSelectionRange(n,n)}catch(e){}}
   if(pv!==null&&$('#pmonto'))$('#pmonto').value=pv;
   $('#pform')&&($('#pform').onsubmit=e=>{e.preventDefault();const mo=parseFloat(String($('#pmonto').value).replace(/\./g,'').replace(',','.'));if(!mo){toast('Falta el monto');return}
     const r=resumen(S.mes),de=r.b>0?'meli':'santi',fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-28',yoDebo=S.yo===de;
@@ -485,6 +507,9 @@ function render(fromSnap){
 }
 function qMonto(){const n=parseFloat(String(S.qM||'').replace(/[$\s]/g,'').replace(/\./g,'').replace(',','.'));return n>0?n:0}
 function bindQuick(){
+  const t=$('#qt'); if(t){ t.oninput=()=>{S.qT=t.value; const r=parse2(t.value);
+    S.qM=r.monto?String(r.monto).replace('.',','):''; S.qCat=r.cat||null; S.qC=r.com; if(r.pago) S.qPago=r.pago; S.qPara=r.para||null; render();};
+    t.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();t.blur()}}; }
   const m=$('#qm'); if(!m) return;
   const upd=()=>{const ps=qPS(),mo=qMonto();if(ps===null)return;
     if($('#qpS'))$('#qpS').textContent=ps>0?fmt(mo*ps/100):'\u2014'; if($('#qpM'))$('#qpM').textContent=ps<100?fmt(mo*(100-ps)/100):'\u2014'};
@@ -495,7 +520,7 @@ function bindQuick(){
     if(!S.qCat){toast('Eleg\u00ed una categor\u00eda');return}
     const c=cat(S.qCat), fecha=S.mes===HOY.slice(0,7)?HOY:S.mes+'-01';
     const x={id:'',tipo:'gasto',fecha,det:(S.qC||'').trim()||c.n,cat:S.qCat,monto,pago:S.qPago||S.yo,por:S.yo,parteS:ps};
-    S.qM='';S.qC='';S.qCat=null;S.qPara=null; if(document.activeElement)document.activeElement.blur(); render();
+    S.qM='';S.qC='';S.qCat=null;S.qPara=null;S.qT='';S.qPago=null;S.qManual=false; if(document.activeElement)document.activeElement.blur(); render();
     guardar(x).then(ok=>{if(ok)toast('Guardado')});};
 }
 
@@ -552,6 +577,8 @@ document.addEventListener('click',e=>{
     case 'borrarTodoOk': S.conf=null; borrarTodo(); break;
     case 'qpara': {const q={...(S.qPara||{santi:true,meli:true})}; q[v]=!q[v]; S.qPara=q; render();} break;
     case 'epara': {readSheet(); const s0=S.edit.parteS>0,m0=S.edit.parteS<100; const s1=v==='santi'?!s0:s0, m1=v==='meli'?!m0:m0; if(!s1&&!m1){toast('Tiene que ser para alguien');break} S.edit.parteS=s1&&m1?50:s1?100:0; renderSheet();} break;
+    case 'qmanual': S.qManual=true; render(); setTimeout(()=>$('#qm')&&$('#qm').focus(),50); break;
+    case 'qcancel': S.qM='';S.qC='';S.qCat=null;S.qPara=null;S.qT='';S.qPago=null;S.qManual=false; render(); break;
     case 'qcat': S.qCat=S.qCat===v?null:v; render(); break;
     case 'saldo': S.conf='saldo'; render(); break;
     case 'saldoNo': S.conf=null; render(); break;
